@@ -100,14 +100,37 @@ local function get_lines_size(lines)
     return w, LABEL_HEIGHT * #lines
 end
 
-local function get_label_size(label)
+local function calculate_multiplier(font_size)
+    local types = {
+        ["+"] = function(a, b) return a + b end,
+        ["-"] = function(a, b) return a - b end,
+        ["*"] = function(a, b) return a * b end,
+    }
+    local pfont = tonumber(core.settings:get("font_size"))
+    local MULTIPLIER = pfont
+    local first = font_size:sub(1, 1)
+    local second = tonumber(font_size:sub(2, string.len(font_size)))
+    if tonumber(first) then
+        MULTIPLIER = tonumber(font_size)
+    else
+        MULTIPLIER = types[first](pfont, second)
+    end
+    MULTIPLIER = MULTIPLIER / pfont
+    return MULTIPLIER
+end
+
+local function get_label_size(label, style)
     label = label or ""
+    local MULTIPLIER = 1
+    if style and style.font_size then
+        MULTIPLIER = calculate_multiplier(style.font_size)
+    end
     if current_lang and current_lang ~= "" and current_lang ~= "en" then
         label = get_translated_string(current_lang, label)
     end
 
     local longest_line_width, line_count = naive_str_width(label)
-    return longest_line_width * CHAR_WIDTH, line_count * LABEL_HEIGHT
+    return longest_line_width * CHAR_WIDTH * MULTIPLIER, line_count * LABEL_HEIGHT * MULTIPLIER
 end
 
 local size_getters = {}
@@ -142,13 +165,13 @@ end
 size_getters.scroll_container = size_getters.container
 
 function size_getters.label(node)
-    local w, h = get_label_size(node.label)
+    local w, h = get_label_size(node.label, node.style)
     return w, LABEL_HEIGHT + (h - LABEL_HEIGHT) * 1.25
 end
 
 local MIN_BUTTON_HEIGHT = 0.8
 function size_getters.button(node)
-    local x, y = get_label_size(node.label)
+    local x, y = get_label_size(node.label, node.style)
     return max(x, MIN_BUTTON_HEIGHT * 2), max(y, MIN_BUTTON_HEIGHT)
 end
 
@@ -159,7 +182,7 @@ size_getters.item_image_button = size_getters.button
 size_getters.button_url = size_getters.button
 
 function size_getters.field(node)
-    local label_w, label_h = get_label_size(node.label)
+    local label_w, label_h = get_label_size(node.label, node.style)
 
     -- This is done in apply_padding as well but the label size has already
     -- been calculated here
@@ -167,7 +190,7 @@ function size_getters.field(node)
         node._padding_top = label_h
     end
 
-    local w, h = get_label_size(node.default)
+    local w, h = get_label_size(node.default, node.style)
     return max(w, label_w, 3), max(h, MIN_BUTTON_HEIGHT)
 end
 size_getters.pwdfield = size_getters.field
@@ -187,7 +210,7 @@ function size_getters.dropdown(node)
 end
 
 function size_getters.checkbox(node)
-    local w, h = get_label_size(node.label)
+    local w, h = get_label_size(node.label, node.style)
     return w + 0.4, h
 end
 
@@ -205,7 +228,7 @@ local function apply_padding(node, x, y)
     elseif field_elems[node.type] and not node._padding_top and node.label and
             #node.label > 0 then
         -- Add _padding_top to fields with labels that have a fixed size set
-        local _, label_h = get_label_size(node.label)
+        local _, label_h = get_label_size(node.label, node.style)
         node._padding_top = label_h
     elseif node.type == "tabheader" and w > 0 and h > 0 then
         -- Handle tabheader if the width and height are set
